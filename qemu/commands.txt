@@ -1,0 +1,58 @@
+设置带宽
+tc qdisc show dev eno1
+tc qdisc del dev eno1 root
+tc qdisc add dev eno1 root tbf rate 10Mbit burst 32kbit latency 400ms
+
+设置时间
+timedatectl set-ntp true
+timedatectl set-timezone Asia/Shanghai
+timedatectl set-time 'YYYY-MM-DD HH:MM:SS'
+
+
+删除lvm
+lvdisplay
+vgdisplay
+lvremove /dev/<volume_group>/<logical_volume>
+vgremove <volume_group>
+pvremove /dev/sdX
+
+磁盘测速
+apt-get install fio
+fio --name=seq_write --size=1G --filename=testfile --rw=write --bs=1M --direct=1
+fio --name=seq_read --size=1G --filename=testfile --rw=read --bs=1M --direct=1
+fio --name=rand_write --size=1G --filename=testfile --rw=randwrite --bs=4k --direct=1
+fio --name=rand_read --size=1G --filename=testfile --rw=randread --bs=4k --direct=1
+
+
+查看是否是ssd
+lsblk -o NAME,ROTA,TYPE,SIZE,MOUNTPOINT
+
+
+创建磁盘
+qemu-img create -f qcow2  -o rotational=0 /opt/nvme0n1/test.qcow2 32G
+modprobe nbd
+qemu-nbd -c /dev/nbd0 /var/lib/libvirt/images/test.qcow2
+echo -e "n\np\n1\n\n\nw" | fdisk /dev/nbd0
+mkfs.xfs -f /dev/nbd0
+qemu-nbd -d /dev/nbd0
+
+添加磁盘
+virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --type disk --subdriver qcow2 --persistent
+
+运行虚拟机
+qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom archlinux-2021.10.01-x86_64.iso -device virtio-scsi-pci,id=scsi0 \
+  -drive file=/path/to/image.qcow2,if=none,id=disk0 \
+  -device scsi-hd,drive=disk0,rotation=0
+
+virt-install --virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/NiuLinkOS.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd

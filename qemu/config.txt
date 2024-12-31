@@ -1,0 +1,304 @@
+
+设置ssd
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+
+<qemu:commandline>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-0,serial=12340'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/titannet/titan-agent/workspace/images/Painet-2.qcow2,if=none,id=nvme-0-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-0-driver0,bus=nvme-0,nsid=1,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+</qemu:commandline>
+
+  
+磁盘配置
+lspci | grep -i nvme
+例如：
+01:00.0 Non-Volatile memory controller: Samsung Electronics Co Ltd NVMe SSD Controller
+bus=0x01, slot=0x00, function=0x0
+
+<disk type='nvme' device='disk'>
+  <driver name='qemu' type='raw'/>
+  <source type='pci' managed='yes' namespace='1'>
+    <address domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+  </source>
+  <target dev='vde' bus='virtio'/>
+</disk>
+
+virt-install --virt-type kvm \
+--name=XWLink \
+--os-variant=ubuntu22.04 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/XWLink.qcow2,size=250 \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/XWLink_ISO_v2.7.6.iso \
+--boot cdrom,hd 
+
+
+virt-install --virt-type kvm \
+--name=XWLink \
+--os-variant=ubuntu22.04 \
+--vcpus=8 \
+--memory=8192 \
+--disk path=/var/lib/libvirt/images/XWLink.qcow2,size=250 \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/os/XWLink_ISO_v2.7.6.iso \
+--boot cdrom,hd 
+
+
+
+ virt-install --virt-type kvm \
+ --name=XWLink \
+ --os-variant=ubuntu22.04 \
+ --vcpus=60 \
+ --memory=122880 \
+ --disk path=/opt/nvme0n1/XWLink.qcow2,size=250 \
+ --network default,model=virtio-net-pci \
+ --graphics vnc \
+ --noautoconsole \
+ --cdrom /home/abc123/XWLink_ISO_v2.7.6.iso \
+ --boot cdrom,hd
+
+
+qemu-img create -f qcow2 /var/lib/libvirt/images/test.qcow2 32G
+modprobe nbd
+qemu-nbd -c /dev/nbd0 /var/lib/libvirt/images/test.qcow2
+echo -e "n\np\n1\n\n\nw" | fdisk /dev/nbd0
+mkfs.xfs -f /dev/nbd0
+qemu-nbd -d /dev/nbd0
+
+virt-install --virt-type kvm \
+--name=XWLink \
+--os-variant=ubuntu22.04 \
+--vcpus=8 \
+--memory=8192 \
+--disk path=/var/lib/libvirt/images/test.qcow2,format=qcow2,device=disk,bus=virtio \
+--disk path=/var/lib/libvirt/images/XWLink.qcow2,size=250 \
+--graphics vnc \
+--noautoconsole \
+--boot hd
+
+virt-install \
+  --name my-vm \
+  --vcpus 2 \
+  --memory 4096 \
+  --disk path=/var/lib/libvirt/images/my-vm.qcow2,size=20 \
+  --os-variant ubuntu20.04 \
+  --network bridge=br0,model=virtio \
+  --graphics spice \
+  --boot uefi \
+  --firmware /usr/share/qemu/ovmf/OVMF_CODE.fd \
+  --cdrom /path/to/ubuntu-22.04.iso \
+  --noautoconsole
+  
+virt-install --virt-type kvm \
+--name=XWLink \
+--os-variant=ubuntu22.04 \
+--vcpus=8 \
+--memory=8192 \
+--disk path=/dev/sda,device=disk,bus=virtio \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/os/XWLink_ISO_v2.7.6.iso \
+--boot uefi
+
+
+qemu-img create -f qcow2 /var/lib/libvirt/images/XWLink.qcow2 250G
+modprobe nbd
+qemu-nbd -c /dev/nbd0 /var/lib/libvirt/images/XWLink.qcow2
+echo -e "n\np\n1\n\n\nw" | fdisk /dev/nbd0
+mkfs.xfs -f /dev/nbd0
+qemu-nbd -d /dev/nbd0
+
+
+virt-install --virt-type kvm \
+--name=XWLink \
+--os-variant=ubuntu22.04 \
+--vcpus=8 \
+--memory=8192 \
+--disk path=/var/lib/libvirt/images/XWLink.qcow2,size=250 \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/os/XWLink_ISO_v2.7.6.iso \
+--boot cdrom,hd 
+
+
+virsh attach-disk XWLink /dev/nvme1n1 vdb --persistent
+
+
+
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-1,serial=12341'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme1n1/jxyhuidu-ssd-1.qcow2,if=none,id=nvme-1-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-1-driver0,bus=nvme-1,nsid=2,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-2,serial=12342'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme2n1/jxyhuidu-ssd-2.qcow2,if=none,id=nvme-2-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-2-driver0,bus=nvme-2,nsid=3,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-3,serial=12343'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme3n1/jxyhuidu-ssd-3.qcow2,if=none,id=nvme-3-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-3-driver0,bus=nvme-3,nsid=4,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+
+
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-4,serial=12344'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme0n1/jxyhuidu-ssd-0.qcow2,if=none,id=nvme-4-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-4-driver0,bus=nvme-4,nsid=4,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+
+
+
+virt-install --virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=32 \
+--memory=32768‬ \
+--disk path=/opt/nvme0n1/test.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd 
+
+
+virt-install \
+--virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=32 \
+--memory=32768 \
+--disk path=/opt/nvme0n1/NiuLinkOS.qcow2,size=250 \
+--network type=direct,source=enp161s0f1.110,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd 
+
+
+
+virt-install --virt-type kvm \
+--name=jinchaoyun \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/jinchaoyun.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/S1_jinchaoyun-centos7LS.iso \
+--boot cdrom,hd
+
+virt-install --virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/NiuLinkOS.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd
+
+<qemu:commandline>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-1,serial=12341'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme1n1/niulinkos-ssd-1.qcow2,if=none,id=nvme-1-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-1-driver0,bus=nvme-1,nsid=2,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-2,serial=12342'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme2n1/niulinkos-ssd-2.qcow2,if=none,id=nvme-2-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-2-driver0,bus=nvme-2,nsid=3,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme,id=nvme-3,serial=12343'/>
+<qemu:arg value='-drive'/>
+<qemu:arg value='format=qcow2,file=/opt/nvme3n1/niulinkos-ssd-3.qcow2,if=none,id=nvme-3-driver0'/>
+<qemu:arg value='-device'/>
+<qemu:arg value='nvme-ns,drive=nvme-3-driver0,bus=nvme-3,nsid=4,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
+</qemu:commandline>
+
+
+qemu-img create -f qcow2 /opt/nvme0n1/niulinkos-ssd-0.qcow2 600G
+modprobe nbd
+qemu-nbd -c /dev/nbd0 /opt/nvme0n1/niulinkos-ssd-0.qcow2
+echo -e "n\np\n1\n\n\nw" | fdisk /dev/nbd0
+mkfs.xfs -f /dev/nbd0
+qemu-nbd -d /dev/nbd0
+
+
+virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --persistent
+virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --type disk --subdriver qcow2 --cache none --persistent
+
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112080 vdb --type disk --cache none --persistent
+
+
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112127 vdc --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112451 vdd --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FN501_Pro_2TB_AA243040156 vde --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243620703 vdf --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243831096 vdg --type disk --cache none --persistent
+
+
+
+
+ vdb      /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112080
+ vdc      /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112127
+ vdd      /dev/disk/by-id/nvme-Fanxiang_S501Q_2TB_FXS501Q244112451
+ vde      /dev/disk/by-id/nvme-FIKWOT_FN501_Pro_2TB_AA243040156
+ vdf      /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243620703
+ vdg      /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243831096
+
+
+virt-install --virt-type kvm \
+--name=TongYong \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/TongYong.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/TongYong-2.1.6-pppoe.iso \
+--boot cdrom,hd
+
+
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243823227 vdb --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243823228 vdc --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243823238 vdd --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243831095 vde --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243831101 vdf --type disk --cache none --persistent
+virsh attach-disk NiuLinkOS /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243831107 vdg --type disk --cache none --persistent
+
+
+virsh attach-disk TongYong /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243640666 vdb --type disk --persistent
+virsh attach-disk TongYong /dev/disk/by-id/nvme-FIKWOT_FX900_1TB_AA243840899 vdc --type disk --persistent
+
+virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --type disk --subdriver qcow2 --cache none --persistent
+
+
+qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom /root/archlinux-2024.09.01-x86_64.iso -device virtio-scsi-pci,id=scsi0 -drive file=/var/lib/libvirt/images/test-ssd.qcow2,if=none,id=disk0,rotation=0 -device scsi-hd,drive=disk0 -vnc :2
+
+qemu-img create -f raw /var/lib/libvirt/images/test-ssd.raw 100G
+https://tomwei7.com/2021/10/09/qemu-network-config/
