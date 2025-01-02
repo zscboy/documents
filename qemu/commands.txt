@@ -18,10 +18,13 @@ pvremove /dev/sdX
 
 磁盘测速
 apt-get install fio
-fio --name=seq_write --size=1G --filename=testfile --rw=write --bs=1M --direct=1
+fio --name=seq_write --size=30G --filename=testfile --rw=write --bs=1m --direct=1
 fio --name=seq_read --size=1G --filename=testfile --rw=read --bs=1M --direct=1
-fio --name=rand_write --size=1G --filename=testfile --rw=randwrite --bs=4k --direct=1
-fio --name=rand_read --size=1G --filename=testfile --rw=randread --bs=4k --direct=1
+fio --name=rand_write --size=1G --filename=testfile --rw=randwrite --bs=1m --direct=1
+fio --name=rand_read --size=1G --filename=testfile --rw=randread --bs=1m --direct=1
+
+查看是否使用了vhost_net
+lsmod | grep vhost
 
 
 查看是否是ssd
@@ -43,7 +46,12 @@ virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --type disk -
 qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom archlinux-2021.10.01-x86_64.iso -device virtio-scsi-pci,id=scsi0 \
   -drive file=/path/to/image.qcow2,if=none,id=disk0 \
   -device scsi-hd,drive=disk0,rotation=0
+  
+qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom archlinux-2021.10.01-x86_64.iso -nographic -device virtio-serial-pci -chardev stdio,id=char0 -device virtconsole,chardev=char0
 
+
+
+安装系统
 virt-install --virt-type kvm \
 --name=NiuLinkOS \
 --os-variant=centos7.0 \
@@ -56,3 +64,15 @@ virt-install --virt-type kvm \
 --noautoconsole \
 --cdrom /home/abc123/NiuLinkOS-v1.1.7-2411141913.iso \
 --boot cdrom,hd
+
+安装archlinux测试系统
+virt-install --virt-type kvm \
+--name=test \
+--os-variant=archlinux \
+--vcpus=2 \
+--memory=2048 \
+--disk path=/var/lib/libvirt/images/test.qcow2,size=20 \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/archlinux-2024.09.01-x86_64.iso \
+--boot cdrom,hd 
