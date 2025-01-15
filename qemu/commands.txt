@@ -18,10 +18,15 @@ pvremove /dev/sdX
 
 磁盘测速
 apt-get install fio
-fio --name=seq_write --size=30G --filename=testfile --rw=write --bs=1m --direct=1
-fio --name=seq_read --size=1G --filename=testfile --rw=read --bs=1M --direct=1
+fio --name=seq_write --size=30G --filename=testfile --rw=write --bs=1m --iodepth=1 --direct=1
+fio --name=seq_read --size=1G --filename=testfile --rw=read --bs=1M --iodepth=1 --direct=1
 fio --name=rand_write --size=1G --filename=testfile --rw=randwrite --bs=1m --direct=1
 fio --name=rand_read --size=1G --filename=testfile --rw=randread --bs=1m --direct=1
+
+
+fio --name=seq_read --filename=/dev/nvme0n1 --rw=read --bs=1M --size=10G --numjobs=1 --direct=1 --iodepth=32
+fio --name=seq_write --filename=/dev/nvme0n1 --rw=write --bs=1M --size=10G --numjobs=1 --direct=1 --iodepth=32
+
 
 查看是否使用了vhost_net
 lsmod | grep vhost
@@ -50,6 +55,56 @@ qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom archlinux-2021.10.01
 qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom archlinux-2021.10.01-x86_64.iso -nographic -device virtio-serial-pci -chardev stdio,id=char0 -device virtconsole,chardev=char0
 
 
+创建pool
+在目录下创建文件/etc/libvirt/storage/nvme0n1.xml
+<pool type='fs'>
+  <name>nvme0n1</name>
+  <source>
+    <device path='/dev/disk/by-uuid/462ca1cb-e246-4da3-8033-d160e3449f23'/>
+    <format type='auto'/>
+  </source>
+  <target>
+    <path>/opt/nvme0n1</path>
+  </target>
+</pool>
+
+创建存储卷
+virsh vol-create-as <pool_name> <volume_name> <size> --format qcow2
+
+virsh attach-disk NiuLinkOS /opt/nvme0n1/ssd-0.qcow2 vdb --type disk --subdriver qcow2 --persistent
+
+
+配置nvme
+配置iommu
+查看是否支持iommu
+dmesg | grep -i iommu
+
+Intel CPU：添加 intel_iommu=on
+AMD CPU：添加 amd_iommu=on
+
+vi /etc/default/grub
+例如：
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash intel_iommu=on"
+或者
+GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=0 intel_iommu=on"
+update-grub
+reboot
+
+查看nvme的pci id
+lspci -nn | grep -i nvme
+virsh nodedev-list --cap pci
+
+在<devices> </devices>中添加pci设备，bus='0x24'是pci id 
+<hostdev mode='subsystem' type='pci' managed='yes'>
+  <source>
+	<address domain='0x0000' bus='0x24'是pci id  slot='0x00' function='0x0'/>
+  </source>
+</hostdev>
+
+
+
+下载云镜像
+wget https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-2111.qcow2
 
 安装系统
 virt-install --virt-type kvm \
@@ -76,3 +131,52 @@ virt-install --virt-type kvm \
 --noautoconsole \
 --cdrom /root/archlinux-2024.09.01-x86_64.iso \
 --boot cdrom,hd 
+
+
+virt-install --virt-type kvm \
+--name=HWHX \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/var/lib/libvirt/images/HWHX.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/HWHX-ZM-2.1.6-pppoe.iso \
+--boot cdrom,hd
+
+
+
+qemu-img create -f qcow2  /opt/nvme3n1/jisha.qcow2 2000G
+
+
+virt-install --virt-type kvm \
+--name=NiuLinkOS-2 \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/var/lib/libvirt/images/NiuLinkOS-2.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno2,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd
+
+
+
+sudo virt-install --name Centos7 \
+  --virt-type kvm --memory 2048 --vcpus 2 \
+  --boot hd,menu=on \
+  --disk path=/home/opt/CentOS-7-x86_64-GenericCloud-2111.qcow2,device=disk\
+  --disk path=/home/opt/config.iso,device=cdrom \
+  --graphics none \
+  --os-variant centos7.0 \
+  --hostdev pci_0000_61_00_0
+  --import
+
+SWX8upXQNDsWzwFt
+47.238.57.19
+
+4a504bf07214539d05c65abc307363fa

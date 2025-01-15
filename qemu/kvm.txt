@@ -1,0 +1,104 @@
+1. 安装kvm
+apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
+
+1.1 修改配置/etc/libvirt/qemu.conf
+#user = "root"
+改成
+user = "root"
+
+2. 创建storage pool
+在目录下/etc/libvirt/storage/创建对应的pool文件
+例如：
+/etc/libvirt/storage/nvme0n1.xml
+
+<pool type='fs'>
+  <name>nvme0n1</name>
+  <source>
+    <device path='/dev/disk/by-uuid/462ca1cb-e246-4da3-8033-d160e3449f23'/>
+    <format type='auto'/>
+  </source>
+  <target>
+    <path>/opt/nvme0n1</path>
+  </target>
+</pool>
+
+virsh pool-define /etc/libvirt/storage/nvme0n1.xml
+virsh pool-start nvme0n1
+virsh pool-autostart nvme0n1
+
+
+2.1 创建存储卷（给虚拟机使用）
+virsh vol-create-as <pool_name> <volume_name> <size> --format qcow2
+例如：
+virsh vol-create-as nvme0n1 ssd-0.qcow2 1000G --format qcow2
+
+3. 安装镜像下载
+
+4.安装系统
+virt-install --virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/NiuLinkOS.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd
+
+参数解析：
+--name 虚拟机的名称
+--os-variant 安装操作系统的名称或者别名
+--vcpus cpu核数
+--memory 内存大小，单位为M
+--disk 配置磁盘参数，路径、大小等
+--network 配置网络参数，如果是拨号方式，一般有个管理线与业务线。 管理线用默认的nat方式即可，管理线用direct passthrough的方式
+--graphics 显示输出方式，目前是vnc
+--noautoconsole 默认不输出到串口
+--cdrom 安装镜像的路径
+--boot cdrom,hd 启动顺序，先从cdrom启动，然后再到硬盘启动
+
+4.１　停止虚拟机
+virsh destroy vmName
+
+4.2 启动虚拟机
+virsh start vmName
+
+4.3 通过vnc进入虚拟机
+4.3.1 通过ssh反向代理，将5900端口暴露到公网服务器，然后从服务器连接到vnc
+例如:
+把本地5900端口重定向到服务器的5901
+ssh -fN -R 5900:localhost:5901 root@39.108.143.56
+
+这个5901还是监听127.0.0.1,需要从定向到本地的0.0.0.0:5900
+ssh -fN -L 0.0.0.0:5900:localhost:5901 localhost
+
+4.3.2 通过webvirtCloud管理后台打开vnc
+
+
+5. 添加磁盘
+
+5.1 列出所有的pool
+virsh pool-list 
+
+5.2 列车当前的存储卷
+virsh vol-list --pool <pool_name>
+
+5.3 给虚拟机添加存储卷
+virsh attach-disk NiuLinkOS /opt/nvme0n1/ssd-0.qcow2 sdb --type disk --subdriver qcow2 --persistent
+
+6.设置网口带宽
+tc qdisc show dev eno1
+tc qdisc del dev eno1 root
+tc qdisc add dev eno1 root tbf rate 10Mbit burst 32kbit latency 400ms
+
+
+6.1 用脚本设置带宽限制定时器
+/usr/local/bin/bandwidth_scheduler.sh
+
+执行：crontab -e
+然后在后面添加
+* * * * * /usr/local/bin/bandwidth_scheduler.sh
+

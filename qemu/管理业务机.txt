@@ -1,0 +1,35 @@
+1. 管理机
+1.1 与传统管理机的区别
+管理机相当于跳板机，但是又与跳板机有些区别，区别主要是业务机主动连管理机，不是管理机主动连业务主机
+
+业务机安装agent --> agent安装frqc --> frqc连接管理机
+
+       控制
+管理机------> 业务机
+
+ 
+2.1 安装agent (非当前线上的agent,需要连上管理机后再单独安装线上的agent)
+apt install wget
+wget https://agent.titannet.io/install-agent.sh
+chmod +x install-agent.sh
+TITAN_CHANNEL=kvm ./install-agent.sh
+
+说明：安装完agent后，agent会自动安装frpc
+
+3. 从管理机控制业务机
+3.1 ssh
+ssh -i /var/www/.ssh/vmbox -o 'proxycommand socat - PROXY:localhost:%h:%p,proxyport=5001' user@0061d2c758d64c87b2051d8ac0255250
+
+user　用户名
+0061d2c758d64c87b2051d8ac0255250　节点Id，可以查看业务机的/etc/machine-id获取
+
+
+3.2 web
+管理机有两个web管理页面，一个是frps，另一个是webvirtcloud
+frps的监听地址是：localhost:5700
+webvirtcloud的监听地址是：localhost:80
+
+可以用ssh将远程的80端口重定向到本地
+ssh -N -L 80:localhost:80 root@39.108.214.29
+
+在本地的web上访问http://loclahost

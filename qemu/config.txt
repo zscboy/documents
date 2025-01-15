@@ -18,6 +18,8 @@ lspci | grep -i nvme
 01:00.0 Non-Volatile memory controller: Samsung Electronics Co Ltd NVMe SSD Controller
 bus=0x01, slot=0x00, function=0x0
 
+ ls /sys/bus/pci/devices/0000:01:00.0/iommu_group
+
 <disk type='nvme' device='disk'>
   <driver name='qemu' type='raw'/>
   <source type='pci' managed='yes' namespace='1'>
@@ -25,6 +27,76 @@ bus=0x01, slot=0x00, function=0x0
   </source>
   <target dev='vde' bus='virtio'/>
 </disk>
+
+
+
+磁盘最优配置，使用virtio, cache=none, io=native
+<disk type='file' device='disk'>
+  <driver name='qemu' type='qcow2' cache='none' io='native'/>
+  <source file='/var/lib/libvirt/images/test-ssd.qcow2'/>
+  <target dev='vdb' bus='virtio'/>
+  <address type='pci' domain='0x0000' bus='0x08' slot='0x00' function='0x0'/>
+</disk>
+
+
+配置ssd盘
+<disk type='file' device='disk'>
+  <driver name='qemu' type='qcow2' cache='none' io='native'/>
+  <source file='/var/lib/libvirt/images/test-ssd.qcow2'/>
+  <target dev='vdb' bus='scsi' rotation_rate='1'/>
+  <address type='drive' controller='0' bus='0' target='0' unit='1'/>
+</disk>
+
+virsh attach-disk NiuLinkOS /opt/nvme0n1/niulinkos-ssd-0.qcow2 vdh --type disk --subdriver qcow2 --persistent
+
+
+配置iommu
+查看是否支持iommu
+dmesg | grep -i iommu
+
+Intel CPU：添加 intel_iommu=on
+AMD CPU：添加 amd_iommu=on
+
+vi /etc/default/grub
+例如：
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash intel_iommu=on"
+或者
+GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=0 intel_iommu=on"
+
+update-grub
+reboot
+
+nvme直通设置
+lspci -nn | grep -i nvme
+virsh nodedev-list --cap pci
+
+
+绑定设备到 VFIO
+lspci -nn
+
+添加以下内容
+vi /etc/modprobe.d/blacklist-nvme.conf
+blacklist nvme
+blacklist nvme_core
+
+update-initramfs -u
+
+vi /etc/modprobe.d/vfio.conf
+options vfio-pci ids=<PCI_ID>
+
+update-initramfs -u
+reboot
+
+（上面的几个命令估计都不用）
+
+echo "0000:61:00.0" > /sys/bus/pci/devices/0000:61:00.0/driver/unbind
+echo "144d:a804" > /sys/bus/pci/drivers/vfio-pci/new_id
+确认是否绑定成功
+lspci -nn -d 144d:a804
+144d:a804 通过命令lspci -nn | grep -i nvme 查看
+
+查看是否已经绑定成功
+lspci -nnk -s 24:00.0
 
 virt-install --virt-type kvm \
 --name=XWLink \
@@ -129,36 +201,6 @@ virt-install --virt-type kvm \
 
 virsh attach-disk XWLink /dev/nvme1n1 vdb --persistent
 
-
-
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme,id=nvme-1,serial=12341'/>
-<qemu:arg value='-drive'/>
-<qemu:arg value='format=qcow2,file=/opt/nvme1n1/jxyhuidu-ssd-1.qcow2,if=none,id=nvme-1-driver0'/>
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme-ns,drive=nvme-1-driver0,bus=nvme-1,nsid=2,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
-
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme,id=nvme-2,serial=12342'/>
-<qemu:arg value='-drive'/>
-<qemu:arg value='format=qcow2,file=/opt/nvme2n1/jxyhuidu-ssd-2.qcow2,if=none,id=nvme-2-driver0'/>
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme-ns,drive=nvme-2-driver0,bus=nvme-2,nsid=3,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
-
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme,id=nvme-3,serial=12343'/>
-<qemu:arg value='-drive'/>
-<qemu:arg value='format=qcow2,file=/opt/nvme3n1/jxyhuidu-ssd-3.qcow2,if=none,id=nvme-3-driver0'/>
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme-ns,drive=nvme-3-driver0,bus=nvme-3,nsid=4,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
-
-
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme,id=nvme-4,serial=12344'/>
-<qemu:arg value='-drive'/>
-<qemu:arg value='format=qcow2,file=/opt/nvme0n1/jxyhuidu-ssd-0.qcow2,if=none,id=nvme-4-driver0'/>
-<qemu:arg value='-device'/>
-<qemu:arg value='nvme-ns,drive=nvme-4-driver0,bus=nvme-4,nsid=4,zoned=false,logical_block_size=4096,physical_block_size=4096'/>
 
 
 
@@ -302,3 +344,43 @@ qemu-system-x86_64 -enable-kvm -m 2048 -boot order=d -cdrom /root/archlinux-2024
 
 qemu-img create -f raw /var/lib/libvirt/images/test-ssd.raw 100G
 https://tomwei7.com/2021/10/09/qemu-network-config/
+
+
+virt-install --virt-type kvm \
+--name= \
+--os-variant=centos7.0 \
+--vcpus=4 \
+--memory=4096‬ \
+--disk path=/opt/nvme0n1/test.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /root/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd 
+
+
+
+nvme1n1                   LVM2_member LVM2 001       hJjwUx-Jqfl-t2s8-2eeM-zzJA-dwKp-wc0fLS                
+nvme2n1                   ext4        1.0            35abf03c-7acb-4f5e-91e2-578f5d3d3a9b    608.5G    62% /opt/nvme1n1
+nvme0n1                   LVM2_member LVM2 001       C07ZTh-1E1j-KQQT-EZbY-7qVf-CuXZ-a5HMyn                
+nvme4n1                   LVM2_member LVM2 001       2CNkYB-blsO-kSo1-a0pR-LI7x-JvOV-IMIk7R                
+nvme3n1                   LVM2_member LVM2 001       rw95EJ-FKmz-qEF2-RVvN-XEfY-53oj-Plv4db                
+nvme5n1                   LVM2_member LVM2 001       VBpK0q-H0Ce-c7Cn-cqtX-2z9K-yjsJ-Wc0QlG                
+nvme6n1                   LVM2_member LVM2 001       J4yWfq-Z3y3-gc2r-1T1B-dmWi-z50f-p8W75b       
+
+
+nvme0n1                   LVM2_member LVM2 001       C07ZTh-1E1j-KQQT-EZbY-7qVf-CuXZ-a5HMyn                
+nvme1n1                   LVM2_member LVM2 001       hJjwUx-Jqfl-t2s8-2eeM-zzJA-dwKp-wc0fLS                
+nvme3n1                   LVM2_member LVM2 001       2CNkYB-blsO-kSo1-a0pR-LI7x-JvOV-IMIk7R                
+nvme2n1                   LVM2_member LVM2 001       rw95EJ-FKmz-qEF2-RVvN-XEfY-53oj-Plv4db                
+nvme5n1                   LVM2_member LVM2 001       J4yWfq-Z3y3-gc2r-1T1B-dmWi-z50f-p8W75b                
+nvme4n1                   LVM2_member LVM2 001       VBpK0q-H0Ce-c7Cn-cqtX-2z9K-yjsJ-Wc0QlG  
+
+nvme0n1                   LVM2_member LVM2 001       C07ZTh-1E1j-KQQT-EZbY-7qVf-CuXZ-a5HMyn                
+nvme1n1                   LVM2_member LVM2 001       hJjwUx-Jqfl-t2s8-2eeM-zzJA-dwKp-wc0fLS                
+nvme2n1                   LVM2_member LVM2 001       2CNkYB-blsO-kSo1-a0pR-LI7x-JvOV-IMIk7R                
+nvme6n1                   xfs                        8ea9e829-41f0-408e-8065-fdb5443754ec                  
+nvme5n1                   xfs                        75616ce1-28bf-470e-ae85-1f2182a6dfa3                  
+nvme3n1                   xfs                        0342ac6b-fac3-4716-be2d-1b28939d72d8                  
+nvme4n1                   LVM2_member LVM2 001       L8CxWo-YDTo-0MVt-GssU-lyqG-5iKG-pvP36L   
