@@ -1,0 +1,20 @@
+apt install systemd-container
+mkdir /var/lib/machines/cockpit-container
+debootstrap --arch amd64 focal /var/lib/machines/cockpit-container-1 http://archive.ubuntu.com/ubuntu/
+systemd-nspawn -D /var/lib/machines/cockpit-container
+systemd-nspawn -D /var/lib/machines/cockpit-container --boot
+machinectl start my-container --bind 9090:8080
+
+端口转发
+systemd-nspawn -D /var/lib/machines/cockpit-container -p 9090
+
+apt install -t focal-backports cockpit
+
+
+修改/etc/apt/sources.list
+deb http://archive.ubuntu.com/ubuntu/ focal main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ focal-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ focal-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ focal-backports main restricted universe multiverse
+
+apt update

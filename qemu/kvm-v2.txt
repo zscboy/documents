@@ -1,0 +1,182 @@
+客户安装
+apt install wget
+wget https://agent.titannet.io/install-agent.sh
+chmod +x install-agent.sh
+TITAN_CHANNEL=kvm ./install-agent.sh
+
+1. enable iommu （为了支持nvme盘直通虚拟机）
+查询是否支持iommu(在机器重启后有这个日志，如果机器已经运行了很久，估计日志会被覆盖):
+dmesg | grep -i iommu
+
+
+Intel CPU：添加 intel_iommu=on
+AMD CPU：添加 amd_iommu=on
+
+vi /etc/default/grub
+intel cpu 添加：
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash intel_iommu=on"
+amd cpu 添加：
+GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=0 intel_iommu=on"
+
+修改完后更新启动选项，然重启系统
+update-grub
+reboot
+
+
+
+2. enable dhcp（自动获取ip）
+vi /etc/netplan/50-cloud-init.yaml
+配置网口的dhcp enable, 例如：
+# This file is generated from information provided by the datasource.  Changes
+# to it will not persist across an instance reboot.  To disable cloud-init's
+# network configuration capabilities, write a file
+# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
+# network: {config: disabled}
+network:
+    ethernets:
+        eno4:
+            dhcp4: true
+    version: 2
+	
+	
+(注意/etc/netplan/50-cloud-init.yaml里面的提示，需要修改/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg才会生效）
+vi /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+添加一行：
+network: {config: disabled}
+
+
+
+3. install kvm
+apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
+
+1.1 修改配置/etc/libvirt/qemu.conf (为了是qemu使用root执行，并且iommu操作nvme盘)
+#user = "root"
+改成
+user = "root"
+
+
+
+4. 下载镜像
+wget https://osfile.niulinkcloud.com/iso/NiuLinkOS-v1.1.7-2411141913.iso
+
+注意：有些平台的镜像需要登录才可以下载，如果不可以直接在Linux上下载，需要搞个下载服务器，在本地下载完后上传到下载服务器，然后在linux上从下载服务器下载镜像
+
+5.安装系统
+virt-install --virt-type kvm \
+--name=NiuLinkOS \
+--os-variant=centos7.0 \
+--vcpus=60 \
+--memory=122880 \
+--disk path=/opt/nvme0n1/NiuLinkOS.qcow2,size=250 \
+--network default,model=virtio-net-pci \
+--network type=direct,source=eno1,source_mode=passthrough \
+--graphics vnc \
+--noautoconsole \
+--cdrom /home/abc123/NiuLinkOS-v1.1.7-2411141913.iso \
+--boot cdrom,hd
+
+参数解析：
+--name 虚拟机的名称
+--os-variant 安装操作系统的名称或者别名
+--vcpus cpu核数
+--memory 内存大小，单位为M
+--disk 配置磁盘参数，路径、大小等
+--network 配置网络参数，如果是拨号方式，一般有个管理线与业务线。 管理线用默认的nat方式即可，管理线用direct passthrough的方式
+--graphics 显示输出方式，目前是vnc
+--noautoconsole 默认不输出到串口
+--cdrom 安装镜像的路径
+--boot cdrom,hd 启动顺序，先从cdrom启动，然后再到硬盘启动
+
+
+注意：direct passthrough要注意，不要绑定到主机当前上网的网卡上，不然网络会断开
+
+注意：安装完成后要把网络修改成多线程模式，提高性能
+例如：
+
+<interface type='direct'>
+  <source dev='eno2' mode='passthrough'/>
+  <model type='virtio'/>
+  <driver name='vhost' queues='16'/>
+</interface>
+
+使用队列可以把带宽提高到万兆级别
+<driver name='vhost' queues='16'/> 
+
+5.１　停止虚拟机
+virsh destroy vmName
+
+5.2 启动虚拟机
+virsh start vmName
+
+5.3 通过vnc进入虚拟机
+5.3.1 通过ssh反向代理，将5900端口暴露到公网服务器，然后从服务器连接到vnc
+例如:
+把本地5900端口重定向到服务器的5901
+ssh -fN -R 5900:localhost:5901 root@39.108.143.56
+
+这个5901还是监听127.0.0.1,需要从定向到本地的0.0.0.0:5900
+ssh -fN -L 0.0.0.0:5900:localhost:5901 localhost
+
+5.3.2 通过webvirtCloud管理后台打开vnc
+
+
+6. 添加磁盘
+
+查看nvme的pci id
+lspci -nn | grep -i nvme
+virsh nodedev-list --cap pci
+或者：
+ls -l /sys/class/nvme
+
+查看确认pci口是不是nvme:
+lspci -nnk -s 81:00.0
+virsh nodedev-dumpxml pci_0000_00_1f.2
+
+
+6.1将系统盘改为ssd
+<disk type='file' device='disk'>
+  <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>
+  <source file='/var/lib/libvirt/images/NiuLinkOS.qcow2'/>
+  <target dev='vda' bus='scsi' rotation_rate='1'/>
+  <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+</disk>
+
+<controller type='scsi' index='0' model='virtio-scsi'>
+</controller>
+
+
+在<devices> </devices>中添加pci设备，bus='0x24'是pci id 
+<hostdev mode='subsystem' type='pci' managed='yes'>
+  <source>
+	<address domain='0x0000' bus='0x24'  slot='0x00' function='0x0'/>
+  </source>
+</hostdev>
+
+
+7.设置网口带宽
+tc qdisc show dev eno1
+tc qdisc del dev eno1 root
+tc qdisc add dev eno1 root tbf rate 10Mbit burst 32kbit latency 400ms
+
+
+7.1 用脚本设置带宽限制定时器
+/usr/local/bin/bandwidth_scheduler.sh
+
+执行：crontab -e
+然后在后面添加
+* * * * * /usr/local/bin/bandwidth_scheduler.sh
+
+7.2 修改时区为上海时区
+timedatectl set-timezone Asia/Shanghai
+* * * * * /usr/local/bin/bandwidth_scheduler.sh
+
+
+8. 分配大页
+8.1 在/etc/default/grub里配置
+default_hugepagesz=1G hugepagesz=1G hugepages=4 hugepagesz=2M hugepages=1024
+
+8.2 查看大页的分配情况
+cat /proc/meminfo | grep -i huge
+
+8.3 临时分配大页的数量
+echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
